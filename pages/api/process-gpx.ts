@@ -406,12 +406,17 @@ class FuelStationFinder {
       xml += '  </trk>\n';
     }
 
-    // Add fuel station waypoints
-    for (const station of fuelStations) {
+    // Add fuel station waypoints with numbered labels
+    for (let i = 0; i < fuelStations.length; i++) {
+      const station = fuelStations[i];
+      const distanceKm = Math.round(station.routeDistance / 1000);
+      const stationNumber = i + 1;
+      
       xml += `  <wpt lat="${station.lat}" lon="${station.lon}">\n`;
-      xml += `    <name>⛽ ${station.name}</name>\n`;
-      xml += `    <desc>${station.brand} - ${Math.round(station.routeDistance/1000)}km from start</desc>\n`;
-      xml += '    <sym>Fuel Station</sym>\n';
+      xml += `    <name>⛽ #${stationNumber} ${station.brand} (${distanceKm}km)</name>\n`;
+      xml += `    <desc>${station.name} - ${station.brand} - ${distanceKm}km from start</desc>\n`;
+      xml += '    <sym>Gas Station</sym>\n';
+      xml += '    <type>Fuel</type>\n';
       xml += '  </wpt>\n';
     }
 
