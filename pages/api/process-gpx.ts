@@ -14,29 +14,124 @@ export const config = {
 // Simple GPX parser (similar to the CLI tool)
 class SimpleGPXParser {
   static parseGPX(content: string) {
-    console.log('🔍 GPX content preview:', content.substring(0, 200));
+    console.log('🔍 GPX content preview:', content.substring(0, 500));
     
-    // More flexible regex to handle different attribute orders and additional attributes
-    const trackPointRegex = /<trkpt[^>]*lat="([^"]+)"[^>]*lon="([^"]+)"[^>]*>(.*?)<\/trkpt>/g;
-    const eleRegex = /<ele>([^<]+)<\/ele>/;
-
+    // Try multiple regex patterns to handle different GPX formats
     const points: Array<{lat: number, lon: number, ele: number}> = [];
+    
+    // Pattern 1: lat before lon with content between tags
+    const pattern1 = /<trkpt[^>]*lat="([^"]+)"[^>]*lon="([^"]+)"[^>]*>([\s\S]*?)<\/trkpt>/gi;
+    
+    // Pattern 2: lon before lat with content between tags  
+    const pattern2 = /<trkpt[^>]*lon="([^"]+)"[^>]*lat="([^"]+)"[^>]*>([\s\S]*?)<\/trkpt>/gi;
+    
+    // Pattern 3: Self-closing trkpt tags (lat before lon)
+    const pattern3 = /<trkpt[^>]*lat="([^"]+)"[^>]*lon="([^"]+)"[^\/]*\/>/gi;
+    
+    // Pattern 4: Self-closing trkpt tags (lon before lat)
+    const pattern4 = /<trkpt[^>]*lon="([^"]+)"[^>]*lat="([^"]+)"[^\/]*\/>/gi;
+    
+    // Pattern 5: Route points (rtept) - some files use routes instead of tracks
+    const pattern5 = /<rtept[^>]*lat="([^"]+)"[^>]*lon="([^"]+)"[^>]*>/gi;
+    
+    const eleRegex = /<ele>([^<]+)<\/ele>/i;
+    
     let match;
     let matchCount = 0;
 
-    while ((match = trackPointRegex.exec(content)) !== null) {
+    // Try pattern 1: lat, lon order with closing tags
+    while ((match = pattern1.exec(content)) !== null) {
       matchCount++;
       const [, lat, lon, pointContent] = match;
       const eleMatch = pointContent.match(eleRegex);
       const ele = eleMatch ? parseFloat(eleMatch[1]) : 0;
-
-      console.log(`📍 Point ${matchCount}: lat=${lat}, lon=${lon}, ele=${ele}`);
+      
+      if (matchCount <= 3) {
+        console.log(`📍 Pattern1 Point ${matchCount}: lat=${lat}, lon=${lon}, ele=${ele}`);
+      }
       
       points.push({
         lat: parseFloat(lat),
         lon: parseFloat(lon),
         ele: ele
       });
+    }
+
+    // If no matches with pattern 1, try pattern 2 (lon, lat order)
+    if (points.length === 0) {
+      console.log('🔄 Trying pattern 2 (lon before lat)...');
+      while ((match = pattern2.exec(content)) !== null) {
+        matchCount++;
+        const [, lon, lat, pointContent] = match;
+        const eleMatch = pointContent.match(eleRegex);
+        const ele = eleMatch ? parseFloat(eleMatch[1]) : 0;
+        
+        if (matchCount <= 3) {
+          console.log(`📍 Pattern2 Point ${matchCount}: lat=${lat}, lon=${lon}, ele=${ele}`);
+        }
+        
+        points.push({
+          lat: parseFloat(lat),
+          lon: parseFloat(lon),
+          ele: ele
+        });
+      }
+    }
+
+    // Try self-closing patterns
+    if (points.length === 0) {
+      console.log('🔄 Trying pattern 3 (self-closing, lat first)...');
+      while ((match = pattern3.exec(content)) !== null) {
+        matchCount++;
+        const [, lat, lon] = match;
+        
+        if (matchCount <= 3) {
+          console.log(`📍 Pattern3 Point ${matchCount}: lat=${lat}, lon=${lon}`);
+        }
+        
+        points.push({
+          lat: parseFloat(lat),
+          lon: parseFloat(lon),
+          ele: 0
+        });
+      }
+    }
+
+    if (points.length === 0) {
+      console.log('🔄 Trying pattern 4 (self-closing, lon first)...');
+      while ((match = pattern4.exec(content)) !== null) {
+        matchCount++;
+        const [, lon, lat] = match;
+        
+        if (matchCount <= 3) {
+          console.log(`📍 Pattern4 Point ${matchCount}: lat=${lat}, lon=${lon}`);
+        }
+        
+        points.push({
+          lat: parseFloat(lat),
+          lon: parseFloat(lon),
+          ele: 0
+        });
+      }
+    }
+
+    // Try route points (rtept)
+    if (points.length === 0) {
+      console.log('🔄 Trying pattern 5 (route points)...');
+      while ((match = pattern5.exec(content)) !== null) {
+        matchCount++;
+        const [, lat, lon] = match;
+        
+        if (matchCount <= 3) {
+          console.log(`📍 Pattern5 Point ${matchCount}: lat=${lat}, lon=${lon}`);
+        }
+        
+        points.push({
+          lat: parseFloat(lat),
+          lon: parseFloat(lon),
+          ele: 0
+        });
+      }
     }
 
     console.log(`📊 Total track points found: ${points.length}`);
