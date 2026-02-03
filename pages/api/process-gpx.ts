@@ -14,18 +14,24 @@ export const config = {
 // Simple GPX parser (similar to the CLI tool)
 class SimpleGPXParser {
   static parseGPX(content: string) {
+    console.log('🔍 GPX content preview:', content.substring(0, 200));
+    
     // More flexible regex to handle different attribute orders and additional attributes
     const trackPointRegex = /<trkpt[^>]*lat="([^"]+)"[^>]*lon="([^"]+)"[^>]*>(.*?)<\/trkpt>/g;
     const eleRegex = /<ele>([^<]+)<\/ele>/;
 
     const points: Array<{lat: number, lon: number, ele: number}> = [];
     let match;
+    let matchCount = 0;
 
     while ((match = trackPointRegex.exec(content)) !== null) {
-      const [, lat, lon, content] = match;
-      const eleMatch = content.match(eleRegex);
+      matchCount++;
+      const [, lat, lon, pointContent] = match;
+      const eleMatch = pointContent.match(eleRegex);
       const ele = eleMatch ? parseFloat(eleMatch[1]) : 0;
 
+      console.log(`📍 Point ${matchCount}: lat=${lat}, lon=${lon}, ele=${ele}`);
+      
       points.push({
         lat: parseFloat(lat),
         lon: parseFloat(lon),
@@ -33,6 +39,8 @@ class SimpleGPXParser {
       });
     }
 
+    console.log(`📊 Total track points found: ${points.length}`);
+    
     return {
       tracks: points.length > 0 ? [{
         name: 'Route',
@@ -306,50 +314,71 @@ class FuelStationFinder {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  console.log('🚀 Starting GPX processing request');
+  
   if (req.method !== 'POST') {
+    console.log('❌ Method not allowed:', req.method);
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
+    console.log('📁 Parsing multipart form data');
     // Parse the multipart form data
     const form = formidable({ multiples: false });
 
     form.parse(req, async (err, fields, files) => {
       if (err) {
+        console.log('❌ Form parsing error:', err);
         return res.status(500).json({ error: 'Failed to parse form data' });
       }
 
       const file = files.gpxFile;
       if (!file || Array.isArray(file)) {
+        console.log('❌ No GPX file provided or invalid file array');
         return res.status(400).json({ error: 'No GPX file provided' });
       }
 
+      console.log('📖 Reading file content');
       // Read file content
       const fileContent = await fs.promises.readFile(file.filepath, 'utf8');
+      console.log('📄 File content length:', fileContent.length);
 
+      console.log('🔍 Parsing GPX data');
       // Parse GPX
       const gpxData = SimpleGPXParser.parseGPX(fileContent);
+      console.log('📊 GPX data parsed:', { tracks: gpxData.tracks.length, routes: gpxData.routes.length, waypoints: gpxData.waypoints.length });
+      
       const routePoints = gpxData.tracks[0]?.segments[0] || [];
+      console.log('📍 Route points found:', routePoints.length);
 
       if (routePoints.length === 0) {
+        console.log('❌ No route points found in GPX file');
         return res.status(400).json({ error: 'No route points found in GPX file' });
       }
 
+      console.log('⛽ Finding fuel stations');
       // Find fuel stations
       const finder = new FuelStationFinder();
       const fuelStations = await finder.findFuelStations(routePoints);
+      console.log('⛽ Fuel stations found:', fuelStations.length);
+      
       const totalDistance = Math.round(finder.calculateTotalDistance(routePoints) / 1000 * 10) / 10;
+      console.log('📏 Total distance:', totalDistance, 'km');
 
+      console.log('📝 Generating enhanced GPX');
       // Generate enhanced GPX
       const enhancedGPX = finder.generateGPX(gpxData, fuelStations);
 
+      console.log('💾 Saving to temp file');
       // Save to temp file
       const tempDir = os.tmpdir();
       const outputFilename = `enhanced-route-${Date.now()}.gpx`;
       const outputPath = path.join(tempDir, outputFilename);
 
       await fs.promises.writeFile(outputPath, enhancedGPX, 'utf8');
+      console.log('✅ File saved successfully:', outputPath);
 
+      console.log('🎉 Processing complete');
       res.status(200).json({
         success: true,
         fuelStations: fuelStations.length,
@@ -360,7 +389,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
   } catch (error) {
-    console.error('Error processing GPX:', error);
+    console.error('❌ Error processing GPX:', error);
     res.status(500).json({
       error: 'Failed to process GPX file',
       details: error instanceof Error ? error.message : 'Unknown error'
