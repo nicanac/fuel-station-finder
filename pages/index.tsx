@@ -39,7 +39,9 @@ export default function Home() {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to process GPX file')
+        const errorData = await response.json().catch(() => ({}))
+        console.error('API Error Response:', errorData)
+        throw new Error(errorData.error || errorData.details?.message || `Failed to process GPX file (${response.status})`)
       }
 
       const data = await response.json()

@@ -334,9 +334,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         const file = files.gpxFile;
+        console.log('📦 Files received:', Object.keys(files));
+        console.log('📁 gpxFile type:', typeof file);
+        console.log('📁 gpxFile isArray:', Array.isArray(file));
+        console.log('📁 gpxFile value:', file);
+        
         if (!file || Array.isArray(file)) {
           console.log('❌ No GPX file provided or invalid file array');
-          return res.status(400).json({ error: 'No GPX file provided' });
+          return res.status(400).json({ error: 'No GPX file provided', receivedFiles: Object.keys(files), fileType: typeof file, isArray: Array.isArray(file) });
         }
 
         console.log('📖 Reading file content');
