@@ -15,7 +15,7 @@ export const config = {
 class SimpleGPXParser {
   static parseGPX(content: string) {
     // Simple regex-based parsing for track points
-    const trackPointRegex = /<trkpt\s+lat="([^"]+)"\s+lon="([^"]+)">(.*?)<\/trkpt>/gs;
+    const trackPointRegex = /<trkpt\s+lat="([^"]+)"\s+lon="([^"]+)">(.*?)<\/trkpt>/g;
     const eleRegex = /<ele>([^<]+)<\/ele>/;
 
     const points = [];
