@@ -339,14 +339,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.log('📁 gpxFile isArray:', Array.isArray(file));
         console.log('📁 gpxFile value:', file);
         
-        if (!file || Array.isArray(file)) {
-          console.log('❌ No GPX file provided or invalid file array');
+        // Handle formidable v3 which returns arrays for files
+        const gpxFile = Array.isArray(file) ? file[0] : file;
+        
+        if (!gpxFile) {
+          console.log('❌ No GPX file provided');
           return res.status(400).json({ error: 'No GPX file provided', receivedFiles: Object.keys(files), fileType: typeof file, isArray: Array.isArray(file) });
         }
 
         console.log('📖 Reading file content');
         // Read file content
-        const fileContent = await fs.promises.readFile(file.filepath, 'utf8');
+        const fileContent = await fs.promises.readFile(gpxFile.filepath, 'utf8');
         console.log('📄 File content length:', fileContent.length);
 
         console.log('🔍 Parsing GPX data');
