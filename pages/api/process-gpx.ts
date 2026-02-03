@@ -154,8 +154,8 @@ class FuelStationFinder {
 
   constructor(options = {}) {
     this.options = {
-      maxDistance: 1000, // Max distance from route (meters)
-      minInterval: 50,   // Min km between fuel stations
+      maxDistance: 2000, // Max distance from route (meters) - increased from 1000
+      minInterval: 40,   // Min km between fuel stations - decreased from 50
       maxInterval: 80,   // Max km between fuel stations
       ...options
     };
@@ -249,16 +249,18 @@ class FuelStationFinder {
   async findNearbyFuelStations(lat: number, lon: number) {
     const cacheKey = `${lat.toFixed(3)},${lon.toFixed(3)}`;
     if (this.cache.has(cacheKey)) {
+      console.log(`📦 Cache hit for ${cacheKey}`);
       return this.cache.get(cacheKey);
     }
 
+    console.log(`🔍 Searching for fuel stations near ${lat.toFixed(4)}, ${lon.toFixed(4)} (radius: ${this.options.maxDistance}m)`);
+
     // OpenStreetMap Overpass API query for fuel stations
     const query = `
-      [out:json];
+      [out:json][timeout:25];
       (
         node["amenity"="fuel"](around:${this.options.maxDistance},${lat},${lon});
         way["amenity"="fuel"](around:${this.options.maxDistance},${lat},${lon});
-        relation["amenity"="fuel"](around:${this.options.maxDistance},${lat},${lon});
       );
       out center;
     `;
@@ -266,17 +268,22 @@ class FuelStationFinder {
     try {
       const response = await fetch('https://overpass-api.de/api/interpreter', {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: query,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `data=${encodeURIComponent(query)}`,
       });
 
+      console.log(`📡 Overpass API response status: ${response.status}`);
+
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ Overpass API error: ${response.status} - ${errorText.substring(0, 200)}`);
         throw new Error(`HTTP ${response.status}`);
       }
 
       const data = await response.json();
+      console.log(`📊 Overpass API returned ${data.elements?.length || 0} elements`);
 
-      const stations: any[] = data.elements
+      const stations: any[] = (data.elements || [])
         .filter((element: any) => element.tags && element.tags.amenity === 'fuel')
         .map((element: any) => ({
           id: element.id,
@@ -289,9 +296,14 @@ class FuelStationFinder {
             { latitude: element.lat || element.center?.lat, longitude: element.lon || element.center?.lon }
           )
         }))
-        .filter((station: any) => station.distance <= this.options.maxDistance)
+        .filter((station: any) => station.lat && station.lon && station.distance <= this.options.maxDistance)
         .sort((a: any, b: any) => a.distance - b.distance)
         .slice(0, 3);
+
+      console.log(`⛽ Found ${stations.length} fuel stations nearby`);
+      if (stations.length > 0) {
+        console.log(`   First station: ${stations[0].name} (${stations[0].brand}) at ${Math.round(stations[0].distance)}m`);
+      }
 
       this.cache.set(cacheKey, stations);
       return stations;
