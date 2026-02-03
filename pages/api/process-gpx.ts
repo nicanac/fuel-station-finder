@@ -327,72 +327,92 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const form = formidable({ multiples: false });
 
     form.parse(req, async (err, fields, files) => {
-      if (err) {
-        console.log('❌ Form parsing error:', err);
-        return res.status(500).json({ error: 'Failed to parse form data' });
+      try {
+        if (err) {
+          console.log('❌ Form parsing error:', err);
+          return res.status(500).json({ error: 'Failed to parse form data', details: err.message });
+        }
+
+        const file = files.gpxFile;
+        if (!file || Array.isArray(file)) {
+          console.log('❌ No GPX file provided or invalid file array');
+          return res.status(400).json({ error: 'No GPX file provided' });
+        }
+
+        console.log('📖 Reading file content');
+        // Read file content
+        const fileContent = await fs.promises.readFile(file.filepath, 'utf8');
+        console.log('📄 File content length:', fileContent.length);
+
+        console.log('🔍 Parsing GPX data');
+        // Parse GPX
+        const gpxData = SimpleGPXParser.parseGPX(fileContent);
+        console.log('📊 GPX data parsed:', { tracks: gpxData.tracks.length, routes: gpxData.routes.length, waypoints: gpxData.waypoints.length });
+        
+        const routePoints = gpxData.tracks[0]?.segments[0] || [];
+        console.log('📍 Route points found:', routePoints.length);
+
+        if (routePoints.length === 0) {
+          console.log('❌ No route points found in GPX file');
+          return res.status(400).json({ error: 'No route points found in GPX file', gpxPreview: fileContent.substring(0, 500) });
+        }
+
+        console.log('⛽ Finding fuel stations');
+        // Find fuel stations
+        const finder = new FuelStationFinder();
+        const fuelStations = await finder.findFuelStations(routePoints);
+        console.log('⛽ Fuel stations found:', fuelStations.length);
+        
+        const totalDistance = Math.round(finder.calculateTotalDistance(routePoints) / 1000 * 10) / 10;
+        console.log('📏 Total distance:', totalDistance, 'km');
+
+        console.log('📝 Generating enhanced GPX');
+        // Generate enhanced GPX
+        const enhancedGPX = finder.generateGPX(gpxData, fuelStations);
+
+        console.log('💾 Saving to temp file');
+        // Save to temp file
+        const tempDir = os.tmpdir();
+        const outputFilename = `enhanced-route-${Date.now()}.gpx`;
+        const outputPath = path.join(tempDir, outputFilename);
+
+        await fs.promises.writeFile(outputPath, enhancedGPX, 'utf8');
+        console.log('✅ File saved successfully:', outputPath);
+
+        console.log('🎉 Processing complete');
+        res.status(200).json({
+          success: true,
+          fuelStations: fuelStations.length,
+          totalDistance,
+          outputFilename,
+          downloadUrl: `/api/download/${outputFilename}`
+        });
+      } catch (innerError) {
+        console.error('❌ Inner error in form processing:', innerError);
+        res.status(500).json({
+          error: 'Failed to process GPX file',
+          details: innerError instanceof Error ? innerError.message : 'Unknown error',
+          type: innerError instanceof Error ? innerError.constructor.name : typeof innerError,
+          stack: innerError instanceof Error ? innerError.stack?.split('\n').slice(0, 5).join('\n') : undefined
+        });
       }
-
-      const file = files.gpxFile;
-      if (!file || Array.isArray(file)) {
-        console.log('❌ No GPX file provided or invalid file array');
-        return res.status(400).json({ error: 'No GPX file provided' });
-      }
-
-      console.log('📖 Reading file content');
-      // Read file content
-      const fileContent = await fs.promises.readFile(file.filepath, 'utf8');
-      console.log('📄 File content length:', fileContent.length);
-
-      console.log('🔍 Parsing GPX data');
-      // Parse GPX
-      const gpxData = SimpleGPXParser.parseGPX(fileContent);
-      console.log('📊 GPX data parsed:', { tracks: gpxData.tracks.length, routes: gpxData.routes.length, waypoints: gpxData.waypoints.length });
-      
-      const routePoints = gpxData.tracks[0]?.segments[0] || [];
-      console.log('📍 Route points found:', routePoints.length);
-
-      if (routePoints.length === 0) {
-        console.log('❌ No route points found in GPX file');
-        return res.status(400).json({ error: 'No route points found in GPX file' });
-      }
-
-      console.log('⛽ Finding fuel stations');
-      // Find fuel stations
-      const finder = new FuelStationFinder();
-      const fuelStations = await finder.findFuelStations(routePoints);
-      console.log('⛽ Fuel stations found:', fuelStations.length);
-      
-      const totalDistance = Math.round(finder.calculateTotalDistance(routePoints) / 1000 * 10) / 10;
-      console.log('📏 Total distance:', totalDistance, 'km');
-
-      console.log('📝 Generating enhanced GPX');
-      // Generate enhanced GPX
-      const enhancedGPX = finder.generateGPX(gpxData, fuelStations);
-
-      console.log('💾 Saving to temp file');
-      // Save to temp file
-      const tempDir = os.tmpdir();
-      const outputFilename = `enhanced-route-${Date.now()}.gpx`;
-      const outputPath = path.join(tempDir, outputFilename);
-
-      await fs.promises.writeFile(outputPath, enhancedGPX, 'utf8');
-      console.log('✅ File saved successfully:', outputPath);
-
-      console.log('🎉 Processing complete');
-      res.status(200).json({
-        success: true,
-        fuelStations: fuelStations.length,
-        totalDistance,
-        outputFilename,
-        downloadUrl: `/api/download/${outputFilename}`
-      });
     });
 
   } catch (error) {
     console.error('❌ Error processing GPX:', error);
+    
+    // Return more detailed error information for debugging
+    const errorDetails = {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      type: error instanceof Error ? error.constructor.name : typeof error,
+      stack: error instanceof Error ? error.stack?.split('\n').slice(0, 5).join('\n') : undefined,
+      timestamp: new Date().toISOString()
+    };
+    
     res.status(500).json({
       error: 'Failed to process GPX file',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      details: errorDetails,
+      debug: true // Always show debug info for now
     });
   }
 }
