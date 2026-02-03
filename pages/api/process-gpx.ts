@@ -18,7 +18,7 @@ class SimpleGPXParser {
     const trackPointRegex = /<trkpt\s+lat="([^"]+)"\s+lon="([^"]+)">(.*?)<\/trkpt>/g;
     const eleRegex = /<ele>([^<]+)<\/ele>/;
 
-    const points = [];
+    const points: Array<{lat: number, lon: number, ele: number}> = [];
     let match;
 
     while ((match = trackPointRegex.exec(content)) !== null) {
@@ -46,6 +46,9 @@ class SimpleGPXParser {
 
 // Fuel station finder logic
 class FuelStationFinder {
+  private options: any;
+  private cache: Map<string, any>;
+
   constructor(options = {}) {
     this.options = {
       maxDistance: 1000, // Max distance from route (meters)
@@ -94,7 +97,7 @@ class FuelStationFinder {
   }
 
   sampleRoutePoints(routePoints: any[], numSamples: number) {
-    const samples = [];
+    const samples: any[] = [];
     const totalDistance = this.calculateTotalDistance(routePoints);
 
     for (let i = 0; i < numSamples; i++) {
@@ -170,7 +173,7 @@ class FuelStationFinder {
 
       const data = await response.json();
 
-      const stations = data.elements
+      const stations: any[] = data.elements
         .filter((element: any) => element.tags && element.tags.amenity === 'fuel')
         .map((element: any) => ({
           id: element.id,
@@ -213,7 +216,7 @@ class FuelStationFinder {
   }
 
   async findFuelStations(routePoints: any[]) {
-    const fuelStations = [];
+    const fuelStations: any[] = [];
     const routeLength = this.calculateTotalDistance(routePoints);
     const numStations = Math.max(1, Math.floor(routeLength / 1000 / this.options.minInterval));
 
